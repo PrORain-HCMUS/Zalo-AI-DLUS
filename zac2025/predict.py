@@ -92,6 +92,7 @@ class HybridPredictor:
         current_confidence = 0.0
 
         if should_detect:
+            matched_detection = None
             all_detections = self.detector.detect(frame_rgb_np)
 
             if len(all_detections) > 0:
