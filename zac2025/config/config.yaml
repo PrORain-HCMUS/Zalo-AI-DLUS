@@ -1,0 +1,47 @@
+# Architecture 2: YOLOv8s + DINOv2 + Tracking Configuration
+
+models:
+  yolo:
+    type: "yolov8"
+    weights: "saved_models/best.pt"
+    img_size: 640
+    conf_threshold: 0.20
+    iou_threshold: 0.45
+    device: "cuda"
+
+  dinov2:
+    model_name: "facebook/dinov2-small"
+    device: "cuda"
+    feature_dim: 384
+
+  ostrack:
+    config: "ostrack/configs/ostrack_256.yaml"
+    weights: "saved_models/ostrack_256.pth"
+    device: "cuda"
+
+inference:
+  detection_interval_high_conf: 15
+  detection_interval_med_conf: 10
+  detection_interval_low_conf: 5
+  detection_interval_search: 1
+
+  tracking_confidence_threshold: 0.40
+  matching_confidence_threshold: 0.60
+  redetection_lost_frames: 20
+
+  tracking_high_conf: 0.80
+  tracking_med_conf: 0.60
+  tracking_low_conf: 0.40
+
+preprocessing:
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+
+output:
+  save_path: "predictions/"
+  format: "json"
+
+optimization:
+  use_tensorrt: false
+  fp16: true
+  batch_size: 1
