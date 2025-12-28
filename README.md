@@ -154,11 +154,14 @@ Download the trained YOLOv8s model:
 
 **Option 1: From Google Drive** (recommended)
 ```bash
-# Install gdown
-pip install gdown
-
-# Download weights
-gdown https://drive.google.com/uc?id=YOUR_FILE_ID -O checkpoints/best.pt
+# Open this folder and download the required files:
+# https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing
+#
+# Place YOLO checkpoint at:
+# checkpoints/best.pt
+#
+# (Optional) If you use local DINO/feature extractor weights from Drive, place them at:
+# model/model.safetensors
 ```
 
 **Option 2: Train from scratch** (see [Training](#training) section)
@@ -196,7 +199,6 @@ Zalo-AI-DLUS/
 ├── scripts/                      # Helper scripts
 ├── notebooks/                    # Jupyter notebooks
 ├── requirements.txt              # Python dependencies
-├── source.txt                    # GitHub repository URL
 └── README.md                     # This file
 ```
 

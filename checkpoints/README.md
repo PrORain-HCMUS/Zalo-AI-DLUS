@@ -10,8 +10,11 @@ This directory contains trained model weights.
 
 ### Option 1: From Google Drive
 ```bash
-pip install gdown
-gdown https://drive.google.com/uc?id=YOUR_FILE_ID -O best.pt
+# 1) Open this folder in your browser and download the checkpoint file(s):
+# https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing
+#
+# 2) Place the downloaded YOLO checkpoint at:
+# checkpoints/best.pt
 ```
 
 ### Option 2: From Competition Website
