@@ -1,3 +1,51 @@
+# Environment
+.env
+.venv/
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Data
+data/
 data.zip
+*.zip
+dataset/
+
+# Models & Checkpoints
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/*.onnx
+checkpoints/*.engine
 models.zip
-zac2025/models
+*.safetensors
+
+# Results
+results/
+submission.json
+predictions/
+*.json
+
+# Training outputs
+runs/
+wandb/
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Old structure
+zac2025/
+model/
+src/__pycache__/
