@@ -49,3 +49,6 @@ Thumbs.db
 zac2025/
 model/
 src/__pycache__/
+
+# Local-only resources
+scripts/_local/
