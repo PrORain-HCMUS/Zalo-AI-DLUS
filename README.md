@@ -169,6 +169,17 @@ ls -R data/train/samples/ | head -20
 **Option 1: Download trained weights** (Recommended)
 
 Download the trained YOLOv8m model from [link](https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg)
+**Option 1: From Google Drive** (recommended)
+```bash
+# Open this folder and download the required files:
+# https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing
+#
+# Place YOLO checkpoint at:
+# checkpoints/best.pt
+#
+# (Optional) If you use local DINO/feature extractor weights from Drive, place them at:
+# model/model.safetensors
+```
 
 **Option 2: Train from scratch** (see [Training](#training) section)
 
@@ -205,7 +216,6 @@ Zalo-AI-DLUS/
 ├── scripts/                      # Helper scripts
 ├── notebooks/                    # Jupyter notebooks
 ├── requirements.txt              # Python dependencies
-├── source.txt                    # GitHub repository URL
 └── README.md                     # This file
 ```
 
