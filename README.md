@@ -166,18 +166,9 @@ ls -R data/train/samples/ | head -20
 
 ### Step 3: Download Pretrained Weights
 
-Download the trained YOLOv8m model:
+**Option 1: Download trained weights** (Recommended)
 
-**Option 1: From Google Drive** (recommended)
-```bash
-# Install gdown
-pip install gdown
-
-# Download weights
-gdown https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg -O checkpoints/best.pt
-```
-
-Or download the weight from [link](https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg)
+Download the trained YOLOv8m model from [link](https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg)
 
 **Option 2: Train from scratch** (see [Training](#training) section)
 
