@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from tqdm import tqdm
-from src.predict import HybridPredictor
+from predict import HybridPredictor
 
 
 def process_competition_dataset(dataset_root, output_file, config_path='config/config.yaml', visualize=False):
@@ -93,7 +93,7 @@ def process_competition_dataset(dataset_root, output_file, config_path='config/c
                 'detections': []
             })
 
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w+') as f:
         json.dump(all_predictions, f, indent=2)
 
     print(f"\n{'='*60}")

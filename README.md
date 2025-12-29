@@ -87,7 +87,8 @@ python -m venv .venv
 ### Step 3: Install Dependencies
 
 ```bash
-pip install --upgrade pip
+python -m pip install --upgrade pip
+pip install Cython
 pip install -r requirements.txt
 ```
 
@@ -112,6 +113,7 @@ python -c "from transformers import AutoModel; print('Transformers OK')"
 ### Step 1: Download Dataset
 
 Download the Zalo AI Challenge 2025 dataset from the competition website.
+Download the extracted dataset from [Drive](https://drive.google.com/drive/u/0/folders/1r4vHwAfRj6OuMdOWPFqwntLhYLDDmpJf)
 
 ### Step 2: Extract and Organize
 
@@ -120,20 +122,34 @@ Extract the dataset and place it in the following structure:
 ```
 Zalo-AI-DLUS/
 ├── data/
-│   ├── train/
-│   │   ├── samples/
-│   │   │   ├── video_001/
-│   │   │   │   ├── drone_video.mp4
-│   │   │   │   └── object_images/
-│   │   │   │       ├── img_1.jpg
-│   │   │   │       ├── img_2.jpg
-│   │   │   │       └── img_3.jpg
-│   │   │   └── ...
-│   │   └── annotations/
-│   │       └── annotations.json
-│   └── test/
-│       └── samples/
-│           └── ...
+│   ├── extracted/          # YOLO format training data
+│   │   ├── train/
+│   │   │   ├── images/
+│   │   │   └── labels/
+│   │   └── val/
+│   │       ├── images/
+│   │       └── labels/
+│   └── zalo/               # Original Zalo competition dataset
+│       ├── train/
+│       │   ├── samples/
+│       │   │   ├── Backpack_0/
+│       │   │   │   ├── drone_video.mp4
+│       │   │   │   └── object_images/
+│       │   │   │       ├── img_1.jpg
+│       │   │   │       ├── img_2.jpg
+│       │   │   │       └── img_3.jpg
+│       │   │   └── ...
+│       │   └── annotations/
+│       │       └── annotations.json
+│       └── test/
+│           └── samples/
+│               ├── BlackBox_0/
+│               ├── BlackBox_1/
+│               ├── CardboardBox_0/
+│               ├── CardboardBox_1/
+│               ├── LifeJacket_0/
+│               ├── LifeJacket_1/
+│               └── ...
 ```
 
 **Commands:**
@@ -150,7 +166,7 @@ ls -R data/train/samples/ | head -20
 
 ### Step 3: Download Pretrained Weights
 
-Download the trained YOLOv8s model:
+Download the trained YOLOv8m model:
 
 **Option 1: From Google Drive** (recommended)
 ```bash
@@ -158,8 +174,10 @@ Download the trained YOLOv8s model:
 pip install gdown
 
 # Download weights
-gdown https://drive.google.com/uc?id=YOUR_FILE_ID -O checkpoints/best.pt
+gdown https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg -O checkpoints/best.pt
 ```
+
+Or download the weight from [link](https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg)
 
 **Option 2: Train from scratch** (see [Training](#training) section)
 
@@ -206,11 +224,11 @@ Zalo-AI-DLUS/
 
 ### Step 1: Prepare Training Data
 
-Create a YOLO format dataset configuration file `data.yaml`:
+Create a YOLO format dataset configuration file `data.yaml` in the root directory:
 
 ```yaml
 # data.yaml
-path: /path/to/dataset
+path: /data
 train: train/images
 val: val/images
 
@@ -223,7 +241,7 @@ names: ['target']
 ```bash
 python src/train.py \
   --data data.yaml \
-  --model yolov8s.pt \
+  --model yolov8m.pt \
   --epochs 100 \
   --img-size 640 \
   --batch-size 16 \
@@ -245,7 +263,7 @@ python src/train.py \
 After training, copy the best weights to the checkpoints directory:
 
 ```bash
-cp runs/train/yolov8s_aeroeyes/weights/best.pt checkpoints/best.pt
+cp runs/train/yolov8m_aeroeyes/weights/best.pt checkpoints/best.pt
 ```
 
 ---
@@ -258,12 +276,12 @@ Process a single drone video with reference images:
 
 ```bash
 python src/predict.py \
-  --video data/test/samples/video_001/drone_video.mp4 \
-  --ref-images data/test/samples/video_001/object_images/img_1.jpg \
-              data/test/samples/video_001/object_images/img_2.jpg \
-              data/test/samples/video_001/object_images/img_3.jpg \
+  --video data/zalo/test/samples/BlackBox_0/drone_video.mp4 \
+  --ref-images data/zalo/test/samples/BlackBox_0/object_images/img_1.jpg \
+              data/zalo/test/samples/BlackBox_0/object_images/img_2.jpg \
+              data/zalo/test/samples/BlackBox_0/object_images/img_3.jpg \
   --config config/config.yaml \
-  --output results/video_001_predictions.json \
+  --output results/video_BlackBox_0_predictions.json \
   --visualize
 ```
 
@@ -288,7 +306,7 @@ Process entire competition dataset:
 
 ```bash
 python src/batch_predict.py \
-  --dataset data/test \
+  --dataset data/zalo/test \
   --output submission.json \
   --config config/config.yaml \
   --visualize
@@ -323,12 +341,15 @@ python src/batch_predict.py \
 ### Calculate Metrics
 
 To evaluate predictions against ground truth:
-
+Đang so sánh với dummy result
 ```bash
-python scripts/evaluate.py \
+python src/evaluate.py \
   --predictions submission.json \
-  --ground-truth data/test/annotations/annotations.json
+  --ground-truth data/zalo/train/annotations/annotations.json \
+  --output results/evaluation_results.json \
+  --iou-threshold 0.5
 ```
+
 
 **Metrics:**
 - **ST-IoU**: Spatio-Temporal Intersection over Union
@@ -427,6 +448,22 @@ yolo export model=checkpoints/best.pt format=engine half=True device=0
 source .venv/bin/activate  # Linux/Mac
 cd /path/to/Zalo-AI-DLUS
 python src/predict.py ...
+```
+
+### Issue: Dataset path errors (cached directory)
+
+**Problem:** YOLOv8 shows errors like:
+```
+RuntimeError: Dataset 'data.yaml' error
+Dataset 'data.yaml' images not found, missing path 'D:\old\path\datasets\data\val\images'
+```
+
+**Cause:** YOLOv8 cached the old dataset directory path in its settings, even after you moved/renamed directories.
+
+**Solutions:**
+1. **Update YOLOv8 settings** (recommended):
+```bash
+python -c "from ultralytics import settings; settings.update({'datasets_dir': 'D:\\your\\project\\path'}); print('Settings updated')"
 ```
 
 ---

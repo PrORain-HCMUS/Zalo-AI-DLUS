@@ -38,7 +38,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='Train YOLOv8 for AeroEyes')
     parser.add_argument('--data', type=str, required=True, help='Path to data.yaml')
-    parser.add_argument('--model', type=str, default='yolov8s.pt', help='Model to use')
+    parser.add_argument('--model', type=str, default='yolov8m.pt', help='Model to use')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
     parser.add_argument('--img-size', type=int, default=640, help='Image size')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
