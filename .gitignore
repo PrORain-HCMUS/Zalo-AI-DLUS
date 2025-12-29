@@ -34,7 +34,12 @@ logs/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+
+# uv / Python tooling
+!pyproject.toml
+!uv.lock
+.python-version
+*.egg-info/
 
 # IDE
 .vscode/
