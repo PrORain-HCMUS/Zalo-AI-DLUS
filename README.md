@@ -92,6 +92,29 @@ pip install Cython
 pip install -r requirements.txt
 ```
 
+**Option (faster dev setup): using `uv`**
+
+If you prefer a faster dependency resolver/installer, you can use `uv`:
+
+```bash
+python -m pip install --upgrade pip
+pip install uv
+
+# Sync dependencies (uses pyproject.toml and generates uv.lock)
+# This will also create a local virtual environment at .venv/
+uv sync
+
+# Run commands without manually activating the venv
+uv run python -m src.predict --help
+uv run python -m src.batch_predict --help
+
+# (Optional) activate the venv
+# Windows:
+#   .venv\Scripts\activate
+# Linux/Mac:
+#   source .venv/bin/activate
+```
+
 **Note**: If you encounter issues with `lap` or `cython-bbox`, install them separately:
 ```bash
 pip install lap==0.4.0
@@ -240,7 +263,7 @@ names: ['target']
 ### Step 2: Train YOLOv8
 
 ```bash
-python src/train.py \
+python -m src.train \
   --data data.yaml \
   --model yolov8m.pt \
   --epochs 100 \
@@ -276,7 +299,7 @@ cp runs/train/yolov8m_aeroeyes/weights/best.pt checkpoints/best.pt
 Process a single drone video with reference images:
 
 ```bash
-python src/predict.py \
+python -m src.predict \
   --video data/zalo/test/samples/BlackBox_0/drone_video.mp4 \
   --ref-images data/zalo/test/samples/BlackBox_0/object_images/img_1.jpg \
               data/zalo/test/samples/BlackBox_0/object_images/img_2.jpg \
@@ -306,7 +329,7 @@ python src/predict.py \
 Process entire competition dataset:
 
 ```bash
-python src/batch_predict.py \
+python -m src.batch_predict \
   --dataset data/zalo/test \
   --output submission.json \
   --config config/config.yaml \
@@ -339,24 +362,14 @@ python src/batch_predict.py \
 
 ## Evaluation
 
-### Calculate Metrics
+Evaluate your predictions by comparing the output JSON with the ground truth annotations provided by the competition. The evaluation metrics include:
 
-To evaluate predictions against ground truth:
-Đang so sánh với dummy result
-```bash
-python src/evaluate.py \
-  --predictions submission.json \
-  --ground-truth data/zalo/train/annotations/annotations.json \
-  --output results/evaluation_results.json \
-  --iou-threshold 0.5
-```
-
-
-**Metrics:**
 - **ST-IoU**: Spatio-Temporal Intersection over Union
 - **Precision**: Detection precision
 - **Recall**: Detection recall
 - **F1-Score**: Harmonic mean of precision and recall
+
+Refer to the competition guidelines for the official evaluation script and metrics calculation.
 
 ---
 
@@ -448,7 +461,7 @@ yolo export model=checkpoints/best.pt format=engine half=True device=0
 ```bash
 source .venv/bin/activate  # Linux/Mac
 cd /path/to/Zalo-AI-DLUS
-python src/predict.py ...
+python -m src.predict ...
 ```
 
 ### Issue: Dataset path errors (cached directory)
