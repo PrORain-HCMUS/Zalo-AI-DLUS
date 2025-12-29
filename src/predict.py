@@ -7,9 +7,9 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
-from models import YOLOv8Detector, TPHYOLOv5Detector, DINOv2FeatureExtractor
-from models import ByteTracker, SimpleTracker
-from utils import (
+from src.models import YOLOv8Detector, TPHYOLOv5Detector, DINOv2FeatureExtractor
+from src.models import ByteTracker, SimpleTracker
+from src.utils import (
     preprocess_reference_images,
     find_best_matching_detection,
     bbox_to_dict,

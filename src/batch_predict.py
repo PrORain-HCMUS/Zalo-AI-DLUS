@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from tqdm import tqdm
-from predict import HybridPredictor
+from src.predict import HybridPredictor
 
 
 def process_competition_dataset(dataset_root, output_file, config_path='config/config.yaml', visualize=False):

@@ -3,7 +3,7 @@
 models:
   yolo:
     type: "yolov8"
-    weights: "checkpoints/yolov8m.pt" # Không load model custom vô được
+    weights: "checkpoints/best.pt"
     img_size: 640
     conf_threshold: 0.20
     iou_threshold: 0.45
