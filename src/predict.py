@@ -167,7 +167,7 @@ class JsonPrototypePipeline:
 
         with open(output_json, 'w') as f:
             f.write('[\n')
-            for i, bbox_dict in enumerate(video_detections_dict['bboxes']):
+            for i, bbox_dict in enumerate(video_detections_dict.get('bboxes', [])):
                 json_line = json.dumps(bbox_dict, separators=(',', ':'))
                 if i < len(video_detections_dict['bboxes']) - 1:
                     f.write(f'{json_line},\n')
