@@ -1,0 +1,30 @@
+# AeroEyes - Drone Object Detection & Tracking Configuration
+
+models:
+  yolo:
+    type: "yolov11s"
+    weights: "checkpoints/detection.pt"
+    img_size: 640
+    conf_threshold: 0.20
+    iou_threshold: 0.45
+    device: "cpu"
+
+  siamese:
+    weights: "checkpoints/siamese.pth"
+    device: "cpu"
+    feature_dim: 384
+    threshold: 0.3
+
+
+preprocessing:
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+
+output:
+  save_path: "results/"
+  format: "json"
+
+optimization:
+  use_tensorrt: false
+  fp16: true
+  batch_size: 1
