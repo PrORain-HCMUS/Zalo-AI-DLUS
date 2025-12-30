@@ -2,31 +2,19 @@
 
 models:
   yolo:
-    type: "yolov8"
-    weights: "checkpoints/best.pt"
+    type: "yolov11s"
+    weights: "checkpoints/detection.pt"
     img_size: 640
     conf_threshold: 0.20
     iou_threshold: 0.45
-    device: "cuda"
+    device: "cpu"
 
-  dinov2:
-    model_name: "facebook/dinov2-small"
-    device: "cuda"
+  siamese:
+    weights: "checkpoints/siamese.pth"
+    device: "cpu"
     feature_dim: 384
+    threshold: 0.3
 
-inference:
-  detection_interval_high_conf: 15
-  detection_interval_med_conf: 10
-  detection_interval_low_conf: 5
-  detection_interval_search: 1
-
-  tracking_confidence_threshold: 0.40
-  matching_confidence_threshold: 0.60
-  redetection_lost_frames: 20
-
-  tracking_high_conf: 0.80
-  tracking_med_conf: 0.60
-  tracking_low_conf: 0.40
 
 preprocessing:
   normalize_mean: [0.485, 0.456, 0.406]

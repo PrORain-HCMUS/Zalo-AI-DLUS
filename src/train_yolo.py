@@ -4,9 +4,9 @@ from pathlib import Path
 from ultralytics import YOLO
 
 
-def train_yolo(data_yaml, model='yolov8s.pt', epochs=100, img_size=640, batch_size=16, project='runs/train', name='yolov8s_aeroeyes'):
+def train_yolo(data_yaml, model='yolo11s.pt', epochs=100, img_size=640, batch_size=16, project='runs/train', name='yolo11s_aeroeyes'):
     """
-    Train YOLOv8 model for AeroEyes object detection.
+    Train YOLO11 model for AeroEyes object detection.
     
     Args:
         data_yaml: Path to data.yaml configuration file
@@ -36,14 +36,14 @@ def train_yolo(data_yaml, model='yolov8s.pt', epochs=100, img_size=640, batch_si
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='Train YOLOv8 for AeroEyes')
+    parser = argparse.ArgumentParser(description='Train YOLO11 for AeroEyes')
     parser.add_argument('--data', type=str, required=True, help='Path to data.yaml')
-    parser.add_argument('--model', type=str, default='yolov8m.pt', help='Model to use')
+    parser.add_argument('--model', type=str, default='yolo11s.pt', help='Model to use')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
     parser.add_argument('--img-size', type=int, default=640, help='Image size')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
     parser.add_argument('--project', type=str, default='runs/train', help='Project directory')
-    parser.add_argument('--name', type=str, default='yolov8s_aeroeyes', help='Experiment name')
+    parser.add_argument('--name', type=str, default='yolo11s_aeroeyes', help='Experiment name')
     
     args = parser.parse_args()
     

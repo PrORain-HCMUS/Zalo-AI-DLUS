@@ -1,240 +1,185 @@
-import os
 import cv2
 import torch
-import yaml
-import json
+import torchvision.transforms as transforms
 import numpy as np
-from pathlib import Path
+from PIL import Image
+import json
+import os
+import torch.nn.functional as F
+import timm
+from ultralytics import YOLO
+import yaml
 from tqdm import tqdm
-
-from src.models import YOLOv8Detector, TPHYOLOv5Detector, DINOv2FeatureExtractor
-from src.models import ByteTracker, SimpleTracker
-from src.utils import (
-    preprocess_reference_images,
-    find_best_matching_detection,
-    bbox_to_dict,
-    format_output_for_submission,
-    visualize_prediction,
-    adaptive_detection_interval
-)
+from src.models.siamese import Backbone, FPNWrapper, AttentionPooling, PrototypeExtractor
 
 
-class HybridPredictor:
-    def __init__(self, reference_images, config_path='config/config.yaml'):
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+class JsonPrototypePipeline:
+    def __init__(self,  yolo_model, extractor, transform, threshold=0.5):
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.threshold = threshold
+        print(f"Initializing Pipeline on {self.device}...")
 
-        print("Initializing Hybrid Predictor (YOLOv8 + DINOv2 + Tracking)...")
+        # 1. Load Models
+        self.detector = yolo_model
+        self.extractor = extractor.to(self.device)
+        self.extractor.eval()
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f"Using device: {self.device}")
+        # 2. Preprocessing
+        self.transform = transform
 
-        yolo_config = self.config['models']['yolo']
-        model_type = yolo_config.get('type', 'yolov8')
+        # 3. Reference Storage
+        # Store as a tensor matrix for vectorized comparison [N_refs, Emb_Dim]
+        self.ref_tensor = None
 
-        if model_type == 'yolov8':
-            self.detector = YOLOv8Detector(
-                weights_path=yolo_config['weights'],
-                img_size=yolo_config['img_size'],
-                conf_thres=yolo_config['conf_threshold'],
-                iou_thres=yolo_config['iou_threshold'],
-                device=self.device
-            )
-        else:
-            self.detector = TPHYOLOv5Detector(
-                weights_path=yolo_config['weights'],
-                img_size=yolo_config['img_size'],
-                conf_thres=yolo_config['conf_threshold'],
-                iou_thres=yolo_config['iou_threshold'],
-                device=self.device
-            )
+    def assign_ref_img(self, ref_image_paths):
+        self.process_reference_images(ref_image_paths)
 
-        self.feature_extractor = DINOv2FeatureExtractor(
-            model_name=self.config['models']['dinov2']['model_name'],
-            device=self.device
-        )
+    def get_embedding_batch(self, img_tensors):
+        """
+        Runs the extractor on a batch of images.
+        Input: Tensor of shape [Batch_Size, C, H, W]
+        Output: Tensor of shape [Batch_Size, Embed_Dim] (Normalized)
+        """
+        with torch.inference_mode():
+            features = self.extractor(img_tensors)
+            # Flatten if necessary (depending on model architecture)
+            if len(features.shape) > 2:
+                features = features.flatten(start_dim=1)
+            # Normalize features for Cosine Similarity
+            features = F.normalize(features, p=2, dim=1)
+            return features
 
-        print("Processing reference images...")
-        self.ref_features_avg, self.ref_features_list = preprocess_reference_images(
-            reference_images, self.feature_extractor
-        )
-        print(f"Reference features computed: {len(self.ref_features_list)} images")
+    def process_reference_images(self, paths):
+        ref_embeddings = []
+        for i, path in enumerate(paths):
+            try:
+                img = Image.open(path).convert('RGB')
+                # Transform and add batch dimension
+                img_t = self.transform(img).unsqueeze(0).to(self.device)
 
-        self.tracker = ByteTracker(max_age=30, min_hits=2, iou_threshold=0.3)
-        self.simple_tracker = SimpleTracker()
+                # Extract and normalize
+                with torch.inference_mode():
+                    emb = self.extractor(img_t).flatten(start_dim=1)
+                    emb = F.normalize(emb, p=2, dim=1)
 
-        self.mode = "search"
-        self.lost_frames = 0
-        self.detection_interval = self.config['inference']['detection_interval_search']
-        self.frame_since_last_detection = 0
+                ref_embeddings.append(emb)
+            except Exception as e:
+                print(f"Error loading {path}: {e}")
 
-        self.tracking_conf_threshold = self.config['inference']['tracking_confidence_threshold']
-        self.matching_threshold = self.config['inference']['matching_confidence_threshold']
-        self.redetection_lost_frames = self.config['inference']['redetection_lost_frames']
+        if ref_embeddings:
+            # Stack into a single matrix: [N_refs, Embed_Dim]
+            self.ref_tensor = torch.cat(ref_embeddings, dim=0)
 
-        self.predictions_buffer = []
+    def process_batch(self, video_path, video_name, output_json='predictions.json'):
+        if self.ref_tensor is None:
+            print("No reference images assigned. Skipping.")
+            return
 
-        print("Hybrid Predictor initialized successfully!")
 
-    def predict_streaming(self, frame_rgb_np, frame_idx):
-        self.frame_since_last_detection += 1
-
-        should_detect = (
-            self.mode == "search" or
-            self.frame_since_last_detection >= self.detection_interval
-        )
-
-        current_bbox = None
-        current_confidence = 0.0
-
-        if should_detect:
-            matched_detection = None
-            all_detections = self.detector.detect(frame_rgb_np)
-
-            if len(all_detections) > 0:
-                matched_detection = find_best_matching_detection(
-                    all_detections,
-                    frame_rgb_np,
-                    self.ref_features_avg,
-                    self.feature_extractor,
-                    threshold=self.matching_threshold
-                )
-
-                if matched_detection:
-                    matched_detection['frame_idx'] = frame_idx
-                    tracked_objects = self.tracker.update([matched_detection])
-
-                    if self.mode == "search":
-                        self.mode = "tracking"
-                        self.lost_frames = 0
-                        print(f"Frame {frame_idx}: Target found! Switching to tracking mode "
-                              f"(similarity={matched_detection.get('similarity', 0):.3f})")
-
-                    self.simple_tracker.update(
-                        matched_detection['bbox'],
-                        matched_detection.get('similarity', matched_detection['confidence'])
-                    )
-
-                    current_bbox = matched_detection['bbox']
-                    current_confidence = matched_detection.get('similarity', matched_detection['confidence'])
-
-                    self.frame_since_last_detection = 0
-                else:
-                    tracked_objects = self.tracker.update([])
-
-            else:
-                tracked_objects = self.tracker.update([])
-
-            if not matched_detection and len(tracked_objects) == 0:
-                self.lost_frames += 1
-
-                if self.lost_frames > self.redetection_lost_frames and self.mode == "tracking":
-                    self.mode = "search"
-                    self.detection_interval = self.config['inference']['detection_interval_search']
-                    self.simple_tracker.reset()
-                    print(f"Frame {frame_idx}: Tracking lost, switching to search mode")
-
-        else:
-            best_track = self.tracker.get_best_track()
-            if best_track:
-                current_bbox = best_track['bbox']
-                current_confidence = best_track['confidence']
-            else:
-                predicted = self.simple_tracker.predict()
-                if predicted:
-                    current_bbox = predicted['bbox']
-                    current_confidence = predicted['confidence']
-                else:
-                    self.lost_frames += 1
-
-                    if self.lost_frames > self.redetection_lost_frames and self.mode == "tracking":
-                        self.mode = "search"
-                        self.detection_interval = self.config['inference']['detection_interval_search']
-                        print(f"Frame {frame_idx}: Tracking lost, switching to search mode")
-
-        if self.mode == "tracking" and current_confidence > 0:
-            self.detection_interval = adaptive_detection_interval(
-                current_confidence,
-                high_thresh=self.config['inference']['tracking_high_conf'],
-                med_thresh=self.config['inference']['tracking_med_conf'],
-                low_thresh=self.config['inference']['tracking_low_conf']
-            )
-
-        if current_bbox is not None and current_confidence > 0.3:
-            return {
-                'bbox': current_bbox,
-                'confidence': current_confidence,
-                'frame_idx': frame_idx
-            }
-
-        return None
-
-    def process_video(self, video_path, output_path=None, visualize=False):
         cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise ValueError(f"Failed to open video: {video_path}")
-
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-
-        print(f"Processing video: {video_path}")
-        print(f"Total frames: {total_frames}, FPS: {fps}")
-
-        predictions = []
         frame_idx = 0
-
-        if visualize:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out_video = cv2.VideoWriter(
-                output_path.replace('.json', '_vis.mp4'),
-                fourcc, fps,
-                (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-            )
-
-        with tqdm(total=total_frames, desc="Processing") as pbar:
-            while True:
+        object_tracks = []
+        
+        with tqdm(total=total_frames, desc=f"Processing {video_name}", unit="frames") as pbar:
+            while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
+                h, w, _ = frame.shape
 
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # YOLO Inference
+                results = self.detector(frame, verbose=False, conf=0.1)
 
-                result = self.predict_streaming(frame_rgb, frame_idx)
+                # Collect crops for batch processing
+                crops = []
+                coords = []
 
-                if result:
-                    bbox_dict = bbox_to_dict(result['bbox'], frame_idx)
-                    predictions.append(bbox_dict)
+                for result in results:
+                    if result.boxes is None: continue
 
-                    if visualize:
-                        frame_vis = visualize_prediction(
-                            frame, result['bbox'], result['confidence']
-                        )
-                        out_video.write(frame_vis)
-                else:
-                    if visualize:
-                        out_video.write(frame)
+                    # Get boxes in one go (on CPU for slicing)
+                    boxes = result.boxes.xyxy.cpu().numpy().astype(int)
+
+                    for box in boxes:
+                        x1, y1, x2, y2 = box
+
+                        # Clamp coordinates
+                        x1, y1 = max(0, x1), max(0, y1)
+                        x2, y2 = min(w, x2), min(h, y2)
+
+                        # Basic size check
+                        if x2 - x1 < 2 or y2 - y1 < 2:
+                            continue
+
+                        # Crop (Keep numpy for now)
+                        obj_crop = frame[y1:y2, x1:x2]
+
+                        # Convert to PIL for Transform (to match original logic)
+                        # Note: This part is CPU bound, difficult to optimize without changing transform logic completely
+                        obj_crop_pil = Image.fromarray(cv2.cvtColor(obj_crop, cv2.COLOR_BGR2RGB))
+
+                        crops.append(self.transform(obj_crop_pil))
+                        coords.append((x1, y1, x2, y2))
+
+                # Batch Inference
+                if crops:
+                    batch_t = torch.stack(crops).to(self.device)
+
+                    batch_emb = self.get_embedding_batch(batch_t)
+
+                    sim_matrix = torch.mm(batch_emb, self.ref_tensor.T)
+
+                    max_vals, max_indices = torch.max(sim_matrix, dim=1)
+                    max_vals_cpu = max_vals.cpu().numpy()
+
+
+                    for idx, score in enumerate(max_vals_cpu):
+
+                        # if score > self.threshold: <--- khỏi filter thì tốt hơn
+                            x1, y1, x2, y2 = coords[idx]
+                            bbox_entry = {
+                                "frame": frame_idx,
+                                "x1": int(x1), "y1": int(y1),
+                                "x2": int(x2), "y2": int(y2)
+                            }
+                            object_tracks.append(bbox_entry)
 
                 frame_idx += 1
                 pbar.update(1)
-
+        
         cap.release()
-        if visualize:
-            out_video.release()
-
-        print(f"Processed {frame_idx} frames, detected target in {len(predictions)} frames")
-
-        if output_path:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            with open(output_path, 'w+') as f:
-                json.dump(predictions, f, indent=2)
-            print(f"Predictions saved to: {output_path}")
-
-        return predictions
 
 
-def main():
+        video_detections_dict = {}
+
+        for bboxes in object_tracks:
+            if bboxes:
+                if "bboxes" not in video_detections_dict:
+                    video_detections_dict["bboxes"] = []
+                video_detections_dict["bboxes"].append(bboxes)
+
+        new_entry = {
+            "video_id": video_name,
+            "detections": [video_detections_dict]
+        }
+
+
+        with open(output_json, 'w') as f:
+            f.write('[\n')
+            for i, bbox_dict in enumerate(video_detections_dict['bboxes']):
+                json_line = json.dumps(bbox_dict, separators=(',', ':'))
+                if i < len(video_detections_dict['bboxes']) - 1:
+                    f.write(f'{json_line},\n')
+                else:
+                    f.write(f'{json_line}\n')
+            f.write(']')
+        print(f"Predictions on {video_name} saved to: {output_json}")
+
+
+
+if __name__ == "__main__":
+
     import argparse
 
     parser = argparse.ArgumentParser(description='Hybrid Predictor for AeroEyes')
@@ -247,23 +192,48 @@ def main():
                         help='Output JSON file path')
     parser.add_argument('--visualize', action='store_true',
                         help='Generate visualization video')
-
     args = parser.parse_args()
+    config_path = args.config
+    with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+    detection_model_path = config['models']['yolo']['weights']
+    comparing_model_path = config['models']['siamese']['weights']
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    predictor = HybridPredictor(
-        reference_images=args.ref_images,
-        config_path=args.config
-    )
+    yolo_model = YOLO(detection_model_path)
 
-    predictions = predictor.process_video(
-        video_path=args.video,
-        output_path=args.output,
-        visualize=args.visualize
-    )
+    model = timm.create_model(
+      "hf_hub:timm/mobilenetv4_conv_medium.e500_r224_in1k",
+        pretrained=True,
+        features_only=True,
+        out_indices=(1, 2, 4)
+    ).to(device)
+    model.eval()
+    backbone = Backbone(model)
+    fpn = FPNWrapper(backbone)
+    att = AttentionPooling()
+    prototypeExtractor = PrototypeExtractor(fpn, att)
 
-    print(f"\nPrediction complete!")
-    print(f"Total detections: {len(predictions)}")
+    data_config = timm.data.resolve_model_data_config(model)
+    transforms = timm.data.create_transform(**data_config, is_training=False)
 
+    if os.path.exists(comparing_model_path):
+        print(f"Loading checkpoint from {comparing_model_path}...")
+        checkpoint = torch.load(comparing_model_path, map_location=device)
 
-if __name__ == '__main__':
-    main()
+        # A. Load Model Weights
+        prototypeExtractor.load_state_dict(checkpoint['model_state_dict'])
+        prototypeExtractor.to(device)
+    prototypeExtractor.eval()
+
+    pipeline = JsonPrototypePipeline(
+        yolo_model = yolo_model,
+        extractor = prototypeExtractor,
+        transform = transforms,
+        threshold=config['models']['siamese']['threshold'])
+    
+    test_data_path = args.video
+    ref_images = args.ref_images
+    pipeline.assign_ref_img(ref_images)
+    pipeline.process_batch(video_path=test_data_path, video_name = args.video.split("/")[4], output_json=args.output)
+

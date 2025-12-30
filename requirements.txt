@@ -3,15 +3,15 @@ numpy==1.26.4  # Must be first - required by other packages during build
 torch==2.5.1
 torchvision==0.20.1
 Cython==3.2.2
-
+typing_extensions==4.13.1
 # Computer Vision  
 opencv-python==4.10.0.84
 Pillow==10.2.0
 
 # Deep Learning Models
-ultralytics==8.2.0
+ultralytics==8.3.242
 transformers==4.40.0
-timm==0.9.16
+timm==1.0.22
 safetensors==0.4.2
 
 # Data Processing

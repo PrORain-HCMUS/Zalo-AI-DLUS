@@ -4,7 +4,9 @@ from .inference_utils import (
     bbox_to_dict,
     format_output_for_submission,
     visualize_prediction,
-    adaptive_detection_interval
+    adaptive_detection_interval,
+    str2list,
+    xywh_norm_to_xyxy_abs
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     'bbox_to_dict',
     'format_output_for_submission',
     'visualize_prediction',
-    'adaptive_detection_interval'
+    'adaptive_detection_interval',
+    'str2list',
+    'xywh_norm_to_xyxy_abs'
 ]

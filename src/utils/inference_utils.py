@@ -2,6 +2,38 @@ import cv2
 import numpy as np
 import torch
 
+def xywh_norm_to_xyxy_abs(bbox_norm, img_width = 1024, img_height=576):
+    # Unpack normalized center coordinates and dimensions
+    norm_cx, norm_cy, norm_w, norm_h = bbox_norm
+
+    # Convert to absolute pixel values
+    abs_cx = round(norm_cx * img_width, 3)
+    abs_cy = round(norm_cy * img_height, 3)
+    abs_w = round(norm_w * img_width, 3)
+    abs_h = round(norm_h * img_height, 3)
+
+    # Convert from center (x,y) to top-left (x,y)
+    abs_x = abs_cx - (abs_w / 2)
+    abs_y = abs_cy - (abs_h / 2)
+
+    return [abs_x, abs_y, abs_x + abs_w, abs_y + abs_h]
+
+def str2list(s: str, round_values: bool = False):
+    tokens = s.strip().split()
+    return [float(t) for t in tokens]
+
+def calculate_iou(boxA, boxB):
+    # ... (implementation from above) ...
+    inter_x1 = max(boxA[0], boxB[0])
+    inter_y1 = max(boxA[1], boxB[1])
+    inter_x2 = min(boxA[2], boxB[2])
+    inter_y2 = min(boxA[3], boxB[3])
+    inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
+    if inter_area == 0: return 0.0
+    area_A = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    area_B = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+    union_area = area_A + area_B - inter_area
+    return inter_area / union_area
 
 def preprocess_reference_images(image_paths, feature_extractor):
     reference_features = []

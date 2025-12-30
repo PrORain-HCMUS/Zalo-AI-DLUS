@@ -2,7 +2,7 @@
 
 **Team DLUS - Zalo AI Challenge 2025**
 
-A hybrid detection and tracking system for finding and localizing target objects in drone videos using reference images. The system combines YOLOv8 for object detection, DINOv2 for feature matching, and ByteTrack for temporal tracking.
+This project addresses the challenge of zero-shot small object detection in drone-captured video for Zalo AI Challenge 2025. The objective is to accurately locate a specific target using only 1 to 3 reference images while operating on hardware-constrained platforms like NVIDIA Jetson.
 
 ---
 
@@ -28,21 +28,18 @@ A hybrid detection and tracking system for finding and localizing target objects
 
 | Component | Model | Parameters | Purpose |
 |-----------|-------|------------|---------|
-| **Detection** | YOLOv8s | ~11M | Detect all objects in frame |
-| **Feature Matching** | DINOv2-small | ~22M | Match detections with reference images |
-| **Tracking** | ByteTrack | <1M | Temporal smoothing & tracking |
-| **Total** | | **~33M** | Fits Jetson Xavier NX (50M limit) |
+| **Detection** | YOLO11s | ~18.3M | Detect all objects in frame |
+| **Feature Matching** | siamese network | ~30.3M | Match detections with reference images |
+| **Total** | | **~48.6M** | Fits Jetson Xavier NX (50M limit) |
 
 ### Pipeline Flow
 
 ```
-Reference Images (3x) → DINOv2 → [Cached Features]
+Reference Images (3x) → siamese network → [Cached Features]
                                         ↓
-Frame → YOLOv8s → All Detections → DINOv2 → Match with Reference
+Frame → YOLO11s → All Detections → siamese network → Match with Reference
                                                     ↓
-                                            Best Match → ByteTrack
-                                                    ↓
-                                            Tracked BBox → Output
+                                                 Output
 ```
 
 ---
@@ -50,13 +47,13 @@ Frame → YOLOv8s → All Detections → DINOv2 → Match with Reference
 ## System Requirements
 
 ### Hardware
-- **GPU**: NVIDIA GPU with CUDA support (tested on RTX 3090, Jetson Xavier NX)
+- **GPU**: NVIDIA GPU with CUDA support (tested on RTX 1080)
 - **RAM**: Minimum 16GB
 - **Storage**: 10GB free space
 
 ### Software
 - **Python**: 3.10.12 (tested and recommended)
-- **CUDA**: 11.8 or higher
+- **CUDA**: 12.6 or higher
 - **Operating System**: Ubuntu 20.04/22.04, Windows 10/11
 
 ---
@@ -88,18 +85,15 @@ python -m venv .venv
 
 ```bash
 python -m pip install --upgrade pip
-pip install Cython
+pip install cython
 pip install -r requirements.txt
 ```
 
 **Option (faster dev setup): using `uv`**
 
-If you prefer a faster dependency resolver/installer, you can use `uv`:
-
-```bash
 python -m pip install --upgrade pip
 pip install uv
-
+```bash
 # Sync dependencies (uses pyproject.toml and generates uv.lock)
 # This will also create a local virtual environment at .venv/
 uv sync
@@ -125,8 +119,8 @@ pip install cython-bbox==0.1.3
 
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
-python -c "from ultralytics import YOLO; print('YOLOv8 OK')"
-python -c "from transformers import AutoModel; print('Transformers OK')"
+python -c "from ultralytics import YOLO; print('YOLO11 OK')"
+python -c "import timm; print('TIMM OK')"
 ```
 
 ---
@@ -135,12 +129,12 @@ python -c "from transformers import AutoModel; print('Transformers OK')"
 
 ### Step 1: Download Dataset
 
-Download the Zalo AI Challenge 2025 dataset from the competition website.
-Download the extracted dataset from [Drive](https://drive.google.com/drive/u/0/folders/1r4vHwAfRj6OuMdOWPFqwntLhYLDDmpJf)
+Download the Zalo AI Challenge 2025 dataset from the competition website and .
+Download the extracted dataset from [Drive](https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h)
 
 ### Step 2: Extract and Organize
 
-Extract the dataset and place it in the following structure:
+Place the directories in the following structure:
 
 ```
 Zalo-AI-DLUS/
@@ -152,6 +146,7 @@ Zalo-AI-DLUS/
 │   │   └── val/
 │   │       ├── images/
 │   │       └── labels/
+│   ├── labels_n_class/     # Multi-class label files for siamese training
 │   └── zalo/               # Original Zalo competition dataset
 │       ├── train/
 │       │   ├── samples/
@@ -191,24 +186,22 @@ ls -R data/train/samples/ | head -20
 
 **Option 1: Download trained weights** (Recommended)
 
-Download the trained YOLOv8m model from [link](https://drive.google.com/file/d/1S14JGulatl9ysYefRnM8MmYCf82ZOgBg)
-**Option 1: From Google Drive** (recommended)
+Download the pre-trained models from [Google Drive](https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing)
+
 ```bash
-# Open this folder and download the required files:
-# https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing
-#
-# Place YOLO checkpoint at:
-# checkpoints/best.pt
-#
-# (Optional) If you use local DINO/feature extractor weights from Drive, place them at:
-# model/model.safetensors
+# Place downloaded weights in checkpoints directory:
+# checkpoints/detection.pt (YOLO11 model)
+# checkpoints/siamese.pth (Siamese network model)
+```
+
 ```
 
 **Option 2: Train from scratch** (see [Training](#training) section)
 
-Place the weights file at:
+Place the weights file after training at:
 ```
-checkpoints/best.pt
+checkpoints/detection.pt
+checkpoints/siamese.pth
 ```
 
 ---
@@ -220,19 +213,21 @@ Zalo-AI-DLUS/
 ├── src/                          # Source code
 │   ├── models/                   # Model definitions
 │   │   ├── __init__.py
-│   │   ├── detector.py           # YOLOv8 detector
-│   │   ├── feature_extractor.py  # DINOv2 feature extractor
+│   │   ├── detector.py           #  detector
+│   │   ├── feature_extractor.py  # feature extractor
 │   │   └── tracker.py            # ByteTrack & SimpleTracker
 │   ├── utils/                    # Utility functions
 │   │   ├── __init__.py
 │   │   └── inference_utils.py    # Helper functions
 │   ├── predict.py                # Single video inference
 │   ├── batch_predict.py          # Batch processing
-│   └── train.py                  # Training script
+│   └── train_yolo.py             # Training script for yolo
+│   └── train_siamese.py          # Training script for siamese network
 ├── config/                       # Configuration files
 │   └── config.yaml               # Main configuration
 ├── checkpoints/                  # Model weights (gitignored)
-│   └── best.pt                   # Trained YOLOv8 model
+│   └── best.pt                   # Trained YOLO11 model
+│   └── siamese.pt                # Trained Siamese model
 ├── data/                         # Dataset (gitignored)
 ├── results/                      # Output results (gitignored)
 ├── docs/                         # Documentation
@@ -252,7 +247,7 @@ Create a YOLO format dataset configuration file `data.yaml` in the root director
 
 ```yaml
 # data.yaml
-path: /data
+path: /data/extracted
 train: train/images
 val: val/images
 
@@ -260,35 +255,60 @@ nc: 1  # number of classes
 names: ['target']
 ```
 
-### Step 2: Train YOLOv8
+### Step 2: Train models
+
+#### Train YOLO11
 
 ```bash
-python -m src.train \
+python -m src.train_yolo \
   --data data.yaml \
-  --model yolov8m.pt \
+  --model yolo11s.pt \
   --epochs 100 \
   --img-size 640 \
   --batch-size 16 \
   --project runs/train \
-  --name yolov8s_aeroeyes
+  --name yolo11s_aeroeyes
 ```
 
 **Training Parameters:**
 - `--data`: Path to data.yaml configuration
-- `--model`: Pretrained model (yolov8n.pt, yolov8s.pt, yolov8m.pt)
+- `--model`: Pretrained model (yolo11n.pt, yolo11s.pt, yolo11.pt)
 - `--epochs`: Number of training epochs (default: 100)
 - `--img-size`: Input image size (default: 640)
 - `--batch-size`: Batch size (adjust based on GPU memory)
 - `--project`: Project directory for saving results
 - `--name`: Experiment name
 
+#### Train siamese network
+
+```bash
+python -m src.train_siamese \
+--support_data data/zalo/train/samples/ \
+--image_folder data/extracted/train/images/ \
+--labels data/labels_n_class/ \
+--epochs 50
+ ```
+
+**Training Parameters:**
+- `--support_data`: Path to support/reference images folder (contains object_images subdirectories)
+- `--image_folder`: Path to training images in YOLO format
+- `--labels`: Path to labels folder containing annotation files
+- `--epochs`: Number of training epochs (default: 100)
+
 ### Step 3: Copy Best Weights
 
 After training, copy the best weights to the checkpoints directory:
 
+**For YOLO11:**
 ```bash
-cp runs/train/yolov8m_aeroeyes/weights/best.pt checkpoints/best.pt
+cp runs/train/yolov11s_aeroeyes/weights/best.pt checkpoints/detection.pt
 ```
+
+**For Siamese Network:**
+```bash
+cp runs/siamese/best.pth checkpoints/siamese.pth
+```
+
 
 ---
 
@@ -305,8 +325,7 @@ python -m src.predict \
               data/zalo/test/samples/BlackBox_0/object_images/img_2.jpg \
               data/zalo/test/samples/BlackBox_0/object_images/img_3.jpg \
   --config config/config.yaml \
-  --output results/video_BlackBox_0_predictions.json \
-  --visualize
+  --output results/video_BlackBox_0_predictions.json 
 ```
 
 **Arguments:**
@@ -330,10 +349,9 @@ Process entire competition dataset:
 
 ```bash
 python -m src.batch_predict \
-  --dataset data/zalo/test \
+  --dataset data/zalo/public_test/samples \
   --output submission.json \
-  --config config/config.yaml \
-  --visualize
+  --config config/config.yaml
 ```
 
 **Arguments:**
@@ -380,19 +398,19 @@ Edit `config/config.yaml` to adjust model parameters:
 ```yaml
 models:
   yolo:
-    type: "yolov8"
-    weights: "checkpoints/best.pt"
-    img_size: 640
-    conf_threshold: 0.20      # Detection confidence threshold
-    iou_threshold: 0.45       # NMS IoU threshold
+      type: "yolov11s"
+      weights: "checkpoints/detection.pt"
+      img_size: 640
+      conf_threshold: 0.20
+      iou_threshold: 0.45
+      device: "cpu"
 
-  dinov2:
-    model_name: "facebook/dinov2-small"
+  siamese:
+      weights: "checkpoints/siamese.pth"
+      device: "cpu"
+      feature_dim: 384
+      threshold: 0.3
 
-inference:
-  matching_confidence_threshold: 0.60  # DINOv2 similarity threshold
-  tracking_confidence_threshold: 0.40  # Min confidence for tracking
-  redetection_lost_frames: 20          # Frames before switching to search
 ```
 
 ### Key Parameters
@@ -401,9 +419,7 @@ inference:
 |-----------|---------|-------------|
 | `conf_threshold` | 0.20 | YOLO confidence threshold |
 | `iou_threshold` | 0.45 | NMS IoU threshold |
-| `matching_confidence_threshold` | 0.60 | DINOv2 similarity threshold |
-| `tracking_confidence_threshold` | 0.40 | Min confidence to stay in tracking |
-| `redetection_lost_frames` | 20 | Frames to wait before re-searching |
+| `threshold` | 0.60 | siamese similarity threshold |
 
 ---
 
@@ -466,16 +482,16 @@ python -m src.predict ...
 
 ### Issue: Dataset path errors (cached directory)
 
-**Problem:** YOLOv8 shows errors like:
+**Problem:** YOLO11 shows errors like:
 ```
 RuntimeError: Dataset 'data.yaml' error
 Dataset 'data.yaml' images not found, missing path 'D:\old\path\datasets\data\val\images'
 ```
 
-**Cause:** YOLOv8 cached the old dataset directory path in its settings, even after you moved/renamed directories.
+**Cause:** YOLO11 cached the old dataset directory path in its settings, even after you moved/renamed directories.
 
 **Solutions:**
-1. **Update YOLOv8 settings** (recommended):
+1. **Update YOLO11s settings** (recommended):
 ```bash
 python -c "from ultralytics import settings; settings.update({'datasets_dir': 'D:\\your\\project\\path'}); print('Settings updated')"
 ```
@@ -513,7 +529,7 @@ For questions or issues:
 
 ## Acknowledgments
 
-- YOLOv8: [Ultralytics](https://github.com/ultralytics/ultralytics)
-- DINOv2: [Meta AI](https://github.com/facebookresearch/dinov2)
+- YOLO11 [Ultralytics](https://github.com/ultralytics/ultralytics)
+- MobileNetV4: [github](https://github.com/jiaowoguanren0615/MobileNetV4)
 - ByteTrack: [ByteTrack](https://github.com/ifzhang/ByteTrack)
 - Zalo AI Challenge 2025
