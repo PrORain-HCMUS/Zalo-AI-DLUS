@@ -194,8 +194,6 @@ Download the pre-trained models from [Google Drive](https://drive.google.com/dri
 # checkpoints/siamese.pth (Siamese network model)
 ```
 
-```
-
 **Option 2: Train from scratch** (see [Training](#training) section)
 
 Place the weights file after training at:
