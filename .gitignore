@@ -60,5 +60,5 @@ src/__pycache__/
 scripts/_local/
 notes.txt
 
-# Docs (generated)
 docs/
+content/

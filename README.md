@@ -26,6 +26,9 @@ This project addresses the challenge of zero-shot small object detection in dron
 
 ### Model Components
 
+> [!NOTE]
+> The system is designed as a **two-stage pipeline**: a high-recall detector followed by a lightweight re-identification module to verify the target with **1–3 reference images**.
+
 | Component | Model | Parameters | Purpose |
 |-----------|-------|------------|---------|
 | **Detection** | YOLO11s | ~18.3M | Detect all objects in frame |
@@ -34,19 +37,17 @@ This project addresses the challenge of zero-shot small object detection in dron
 
 ### Pipeline Flow
 
-```
-Reference Images (3x) → siamese network → [Cached Features]
-                                        ↓
-Frame → YOLO11s → All Detections → siamese network → Match with Reference
-                                                    ↓
-                                                 Output
-```
+![Pipeline Flow](assets/img/pipeline.jpg)
 
 ---
 
 ## System Requirements
 
 ### Hardware
+
+> [!IMPORTANT]
+> The competition constraint targets **Jetson Xavier NX** and a strict parameter budget. This project keeps the total model size under the limit while preserving real-time throughput.
+
 - **GPU**: NVIDIA GPU with CUDA support (tested on RTX 1080)
 - **RAM**: Minimum 16GB
 - **Storage**: 10GB free space
@@ -83,6 +84,9 @@ python -m venv .venv
 
 ### Step 3: Install Dependencies
 
+> [!NOTE]
+> If you only need to run inference, you can skip optional training-only tooling. For development, `uv` can make dependency management faster and more reproducible.
+
 ```bash
 python -m pip install --upgrade pip
 pip install cython
@@ -90,6 +94,9 @@ pip install -r requirements.txt
 ```
 
 **Option (faster dev setup): using `uv`**
+
+> [!TIP]
+> `uv` will create and manage a local virtual environment automatically (typically at `.venv/`).
 
 python -m pip install --upgrade pip
 pip install uv
@@ -114,6 +121,9 @@ uv run python -m src.batch_predict --help
 pip install lap==0.4.0
 pip install cython-bbox==0.1.3
 ```
+
+> [!WARNING]
+> On Windows, make sure you are using the correct Python environment (venv) when installing packages and running scripts, otherwise imports may fail.
 
 ### Step 4: Verify Installation
 
@@ -186,6 +196,9 @@ ls -R data/train/samples/ | head -20
 
 **Option 1: Download trained weights** (Recommended)
 
+> [!IMPORTANT]
+> Place model weights under `checkpoints/` exactly as shown below. The folder is typically gitignored, so weights are not stored in the repository.
+
 Download the pre-trained models from [Google Drive](https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h?usp=sharing)
 
 ```bash
@@ -257,6 +270,9 @@ names: ['target']
 
 #### Train YOLO11
 
+> [!TIP]
+> If you are only reproducing results, start with **Option 1 (download pretrained weights)** and jump to [Inference](#inference).
+
 ```bash
 python -m src.train_yolo \
   --data data.yaml \
@@ -313,6 +329,9 @@ cp runs/siamese/best.pth checkpoints/siamese.pth
 ## Inference
 
 ### Single Video Inference
+
+> [!NOTE]
+> Provide 1–3 reference images. The feature matching stage caches reference embeddings for speed.
 
 Process a single drone video with reference images:
 
@@ -418,6 +437,9 @@ models:
 | `conf_threshold` | 0.20 | YOLO confidence threshold |
 | `iou_threshold` | 0.45 | NMS IoU threshold |
 | `threshold` | 0.60 | siamese similarity threshold |
+
+> [!IMPORTANT]
+> `conf_threshold` trades **recall vs precision**. The pipeline is designed to keep recall high in Stage 1 and filter false positives in Stage 2.
 
 ---
 
@@ -562,6 +584,9 @@ All generated images are saved to `assets/img/` directory.
 
 ### Issue: CUDA out of memory
 
+> [!WARNING]
+> CUDA OOM usually indicates your batch size / image size exceeds GPU memory. Reduce them first before changing model code.
+
 **Solution:** Reduce batch size or image size in config:
 ```yaml
 yolo:
@@ -576,6 +601,9 @@ yolo:
 3. Fine-tune YOLO on your specific dataset
 
 ### Issue: Slow inference
+
+> [!TIP]
+> If you deploy on Jetson, TensorRT export can significantly improve latency. Measure accuracy after export.
 
 **Solutions:**
 1. Convert models to TensorRT:
@@ -609,6 +637,9 @@ Dataset 'data.yaml' images not found, missing path 'D:\old\path\datasets\data\va
 ```bash
 python -c "from ultralytics import settings; settings.update({'datasets_dir': 'D:\\your\\project\\path'}); print('Settings updated')"
 ```
+
+> [!NOTE]
+> If you switch machines or move the dataset folder, re-check Ultralytics settings to avoid confusing cached paths.
 
 ---
 
