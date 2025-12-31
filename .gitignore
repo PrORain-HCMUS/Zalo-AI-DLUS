@@ -20,6 +20,7 @@ checkpoints/*.onnx
 checkpoints/*.engine
 models.zip
 *.safetensors
+t.ipynb
 
 # Results
 results/

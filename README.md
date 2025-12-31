@@ -130,7 +130,7 @@ python -c "import timm; print('TIMM OK')"
 ### Step 1: Download Dataset
 
 Download the Zalo AI Challenge 2025 dataset from the competition website and .
-Download the extracted dataset from [Drive](https://drive.google.com/drive/folders/1fcDnRgNIE6XZw1ppbLczHo5e2q1n8y6h)
+Download the extracted dataset from [Drive](https://drive.google.com/file/d/1Iqi-_DvIA8CUamEXdNjvd-C3-A6AGN_L/view?usp=drive_link)
 
 ### Step 2: Extract and Organize
 
@@ -172,8 +172,6 @@ Zalo-AI-DLUS/
 
 **Commands:**
 ```bash
-# Create data directory
-mkdir -p data
 
 # Extract dataset (example)
 unzip zalo_ai_2025_dataset.zip -d data/
@@ -312,16 +310,21 @@ cp runs/siamese/best.pth checkpoints/siamese.pth
 
 ## Inference
 
+Create results directory if does not exist:
+```bash
+mkdir -p results
+```
+
 ### Single Video Inference
 
 Process a single drone video with reference images:
 
 ```bash
 python -m src.predict \
-  --video data/zalo/test/samples/BlackBox_0/drone_video.mp4 \
-  --ref-images data/zalo/test/samples/BlackBox_0/object_images/img_1.jpg \
-              data/zalo/test/samples/BlackBox_0/object_images/img_2.jpg \
-              data/zalo/test/samples/BlackBox_0/object_images/img_3.jpg \
+  --video data/zalo/public_test/samples/BlackBox_0/drone_video.mp4 \
+  --ref-images data/zalo/public_test/samples/BlackBox_0/object_images/img_1.jpg \
+              data/zalo/public_test/samples/BlackBox_0/object_images/img_2.jpg \
+              data/zalo/public_test/samples/BlackBox_0/object_images/img_3.jpg \
   --config config/config.yaml \
   --output results/video_BlackBox_0_predictions.json 
 ```
