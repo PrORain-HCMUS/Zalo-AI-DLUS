@@ -2,7 +2,13 @@
 
 **Team DLUS - Zalo AI Challenge 2025**
 
-This project addresses the challenge of zero-shot small object detection in drone-captured video for Zalo AI Challenge 2025. The objective is to accurately locate a specific target using only 1 to 3 reference images while operating on hardware-constrained platforms like NVIDIA Jetson.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![Ultralytics YOLO](https://img.shields.io/badge/Ultralytics-YOLOv8-111827)](https://github.com/ultralytics/ultralytics)
+[![Jetson](https://img.shields.io/badge/Jetson-Xavier%20NX-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/embedded/jetson-xavier-nx-devkit)
+
+This project addresses the challenge of zero-shot small object detection in drone-captured video for Zalo AI Challenge 2025. The objective is to accurately locate a specific target using very few number of reference images while operating on hardware-constrained platforms like NVIDIA Jetson.
 
 ---
 
@@ -27,13 +33,13 @@ This project addresses the challenge of zero-shot small object detection in dron
 ### Model Components
 
 > [!NOTE]
-> The system is designed as a **two-stage pipeline**: a high-recall detector followed by a lightweight re-identification module to verify the target with **1–3 reference images**.
+> The system is designed as a **two-stage pipeline**: a high-recall detector followed by a lightweight re-identification module to verify the target with **very few reference images**.
 
 | Component | Model | Parameters | Purpose |
 |-----------|-------|------------|---------|
-| **Detection** | YOLO11s | ~18.3M | Detect all objects in frame |
+| **Detection** | YOLOv8s | ~11M | Detect all objects in frame |
 | **Feature Matching** | Siamese network with MobileNetV4 backbone | ~30.3M | Match detections with reference images |
-| **Total** | | **~48.6M** | Fits Jetson Xavier NX (50M limit) |
+| **Total** | | **~41.3M** | Fits Jetson Xavier NX (50M limit) |
 
 ### Pipeline Flow
 
@@ -42,12 +48,12 @@ This project addresses the challenge of zero-shot small object detection in dron
 ### Detailed Breakdown
 
 > [!IMPORTANT]
-> The pipeline follows a **high-recall detection** stage first, then a **re-identification** stage to filter false positives using **1–3 reference images**.
+> The pipeline follows a **high-recall detection** stage first, then a **re-identification** stage to filter false positives using **very few reference images**.
 
-#### Stage 1 — Detection (YOLO11s)
+#### Stage 1 — Detection (YOLOv8s)
 
-- **Model**: `yolo11s` (fine-tuned on drone data, class-agnostic)
-- **Parameters**: ~18.3M
+- **Model**: `yolov8s` (fine-tuned on drone data, class-agnostic)
+- **Parameters**: ~11M
 - **Goal**: maximize recall (capture all potential targets)
 - **Key hyperparameters**:
   - `conf_threshold`: **0.20**
@@ -174,7 +180,7 @@ pip install cython-bbox==0.1.3
 
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
-python -c "from ultralytics import YOLO; print('YOLO11 OK')"
+python -c "from ultralytics import YOLO; print('YOLOv8 OK')"
 python -c "import timm; print('TIMM OK')"
 ```
 
@@ -246,7 +252,7 @@ Download the pre-trained models from [Google Drive](https://drive.google.com/dri
 
 ```bash
 # Place downloaded weights in checkpoints directory:
-# checkpoints/detection.pt (YOLO11 model)
+# checkpoints/detection.pt (YOLOv8 model)
 # checkpoints/siamese.pth (Siamese network model)
 ```
 
@@ -280,7 +286,7 @@ Zalo-AI-DLUS/
 ├── config/                       # Configuration files
 │   └── config.yaml               # Main configuration
 ├── checkpoints/                  # Model weights (gitignored)
-│   └── best.pt                   # Trained YOLO11 model
+│   └── best.pt                   # Trained YOLOv8 model
 │   └── siamese.pt                # Trained Siamese model
 ├── data/                         # Dataset (gitignored)
 ├── results/                      # Output results (gitignored)
@@ -311,7 +317,7 @@ names: ['target']
 
 ### Step 2: Train models
 
-#### Train YOLO11
+#### Train YOLOv8
 
 > [!TIP]
 > If you are only reproducing results, start with **Option 1 (download pretrained weights)** and jump to [Inference](#inference).
@@ -319,17 +325,17 @@ names: ['target']
 ```bash
 python -m src.train_yolo \
   --data data.yaml \
-  --model yolo11s.pt \
+  --model yolov8s.pt \
   --epochs 100 \
   --img-size 640 \
   --batch-size 16 \
   --project runs/train \
-  --name yolo11s_aeroeyes
+  --name yolov8s_aeroeyes
 ```
 
 **Training Parameters:**
 - `--data`: Path to data.yaml configuration
-- `--model`: Pretrained model (yolo11n.pt, yolo11s.pt, yolo11.pt)
+- `--model`: Pretrained model (yolov8n.pt, yolov8s.pt, yolov8m.pt)
 - `--epochs`: Number of training epochs (default: 100)
 - `--img-size`: Input image size (default: 640)
 - `--batch-size`: Batch size (adjust based on GPU memory)
@@ -356,9 +362,9 @@ python -m src.train_siamese \
 
 After training, copy the best weights to the checkpoints directory:
 
-**For YOLO11:**
+**For YOLOv8:**
 ```bash
-cp runs/train/yolov11s_aeroeyes/weights/best.pt checkpoints/detection.pt
+cp runs/train/yolov8s_aeroeyes/weights/best.pt checkpoints/detection.pt
 ```
 
 **For Siamese Network:**
@@ -463,7 +469,7 @@ Edit `config/config.yaml` to adjust model parameters:
 ```yaml
 models:
   yolo:
-      type: "yolov11s"
+      type: "yolov8s"
       weights: "checkpoints/detection.pt"
       img_size: 640
       conf_threshold: 0.20
@@ -672,16 +678,16 @@ python -m src.predict ...
 
 ### Issue: Dataset path errors (cached directory)
 
-**Problem:** YOLO11 shows errors like:
+**Problem:** Ultralytics shows errors like:
 ```
 RuntimeError: Dataset 'data.yaml' error
 Dataset 'data.yaml' images not found, missing path 'D:\old\path\datasets\data\val\images'
 ```
 
-**Cause:** YOLO11 cached the old dataset directory path in its settings, even after you moved/renamed directories.
+**Cause:** Ultralytics cached the old dataset directory path in its settings, even after you moved/renamed directories.
 
 **Solutions:**
-1. **Update YOLO11s settings** (recommended):
+1. **Update Ultralytics settings** (recommended):
 ```bash
 python -c "from ultralytics import settings; settings.update({'datasets_dir': 'D:\\your\\project\\path'}); print('Settings updated')"
 ```
@@ -763,7 +769,7 @@ For questions or issues:
 
 ## Acknowledgments
 
-- YOLO11 [Ultralytics](https://github.com/ultralytics/ultralytics)
+- YOLOv8 [Ultralytics](https://github.com/ultralytics/ultralytics)
 - MobileNetV4: [github](https://github.com/jiaowoguanren0615/MobileNetV4)
 - ByteTrack: [ByteTrack](https://github.com/ifzhang/ByteTrack)
 - Zalo AI Challenge 2025
