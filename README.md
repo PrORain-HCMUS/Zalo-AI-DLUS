@@ -1,12 +1,15 @@
 # AeroEyes - Drone Object Detection & Tracking
 
-**Team DLUS - Zalo AI Challenge 2025**
+<div align="center">
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
 [![Ultralytics YOLO](https://img.shields.io/badge/Ultralytics-YOLOv8-111827)](https://github.com/ultralytics/ultralytics)
 [![Jetson](https://img.shields.io/badge/Jetson-Xavier%20NX-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/embedded/jetson-xavier-nx-devkit)
+
+</div>
 
 This project addresses the challenge of zero-shot small object detection in drone-captured video for Zalo AI Challenge 2025. The objective is to accurately locate a specific target using very few number of reference images while operating on hardware-constrained platforms like NVIDIA Jetson.
 
