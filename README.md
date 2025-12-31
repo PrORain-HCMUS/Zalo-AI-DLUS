@@ -29,7 +29,7 @@ This project addresses the challenge of zero-shot small object detection in dron
 | Component | Model | Parameters | Purpose |
 |-----------|-------|------------|---------|
 | **Detection** | YOLO11s | ~18.3M | Detect all objects in frame |
-| **Feature Matching** | siamese network | ~30.3M | Match detections with reference images |
+| **Feature Matching** | Siamese network with MobileNetV4 backbone | ~30.3M | Match detections with reference images |
 | **Total** | | **~48.6M** | Fits Jetson Xavier NX (50M limit) |
 
 ### Pipeline Flow
