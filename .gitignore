@@ -21,7 +21,6 @@ checkpoints/*.engine
 models.zip
 *.safetensors
 t.ipynb
-
 # Results
 results/
 submission.json
@@ -61,5 +60,5 @@ src/__pycache__/
 scripts/_local/
 notes.txt
 
-# Docs (generated)
 docs/
+content/
