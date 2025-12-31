@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
-[![Ultralytics YOLO](https://img.shields.io/badge/Ultralytics-YOLOv8-111827)](https://github.com/ultralytics/ultralytics)
+[![Ultralytics YOLO](https://img.shields.io/badge/Ultralytics-YOLO11-111827)](https://github.com/ultralytics/ultralytics)
 [![Jetson](https://img.shields.io/badge/Jetson-Xavier%20NX-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/embedded/jetson-xavier-nx-devkit)
 
 </div>
@@ -40,9 +40,9 @@ This project addresses the challenge of zero-shot small object detection in dron
 
 | Component | Model | Parameters | Purpose |
 |-----------|-------|------------|---------|
-| **Detection** | YOLOv8s | ~11M | Detect all objects in frame |
+| **Detection** | YOLO11s | ~18.3M | Detect all objects in frame |
 | **Feature Matching** | Siamese network with MobileNetV4 backbone | ~30.3M | Match detections with reference images |
-| **Total** | | **~41.3M** | Fits Jetson Xavier NX (50M limit) |
+| **Total** | | **~48.6M** | Fits Jetson Xavier NX (50M limit) |
 
 ### Pipeline Flow
 
@@ -53,10 +53,10 @@ This project addresses the challenge of zero-shot small object detection in dron
 > [!IMPORTANT]
 > The pipeline follows a **high-recall detection** stage first, then a **re-identification** stage to filter false positives using **very few reference images**.
 
-#### Stage 1 — Detection (YOLOv8s)
+#### Stage 1 — Detection (YOLO11s)
 
-- **Model**: `yolov8s` (fine-tuned on drone data, class-agnostic)
-- **Parameters**: ~11M
+- **Model**: `yolo11s` (fine-tuned on drone data, class-agnostic)
+- **Parameters**: ~18.3M
 - **Goal**: maximize recall (capture all potential targets)
 - **Key hyperparameters**:
   - `conf_threshold`: **0.20**
@@ -69,25 +69,29 @@ This project addresses the challenge of zero-shot small object detection in dron
 - **Similarity**: cosine similarity between ROI embedding and reference embedding
 - **Caching**: reference features are cached to speed up inference
 - **Key hyperparameters**:
-  - `threshold` (similarity): **0.60** (configurable)
+  - `threshold` (similarity): **0.30** (configurable)
 
 > [!NOTE]
 > Stage 2 is designed to improve precision by filtering false positives produced by Stage 1.
 
 #### Tracking & Post-processing
 
-- **Tracker**: ByteTrack
-- **Temporal consistency**:
-  - **Kalman Filter**: predict object location in the next frame
-  - **IoU Matching**: associate detections to tracks
-  - **Track Management**: maintain/remove tracks over time
-  - **Confidence Decay**: decay track confidence when detections are missing
-- **Adaptive detection intervals** (for speed vs accuracy trade-off):
+> [!NOTE]
+> We **experimented with** temporal tracking to improve stability across frames. The repository includes an implementation in `src/models/tracker.py`, but the **default inference scripts** (`src/predict.py`, `src/batch_predict.py`) currently run **frame-wise detection + matching** (no tracking) for simplicity and reproducibility.
+
+- **Tracking (experimental)**: ByteTrack-style tracker (`ByteTracker`)
+  - **Kalman-based prediction**: predict object location in the next frame
+  - **IoU matching**: associate detections with existing tracks
+  - **Track management**: maintain/remove tracks over time
+  - **Confidence decay**: decay track confidence when detections are missing
+
+- **Speed/accuracy trade-off (experimental)**: adaptive detection intervals
   - **High confidence** (>0.80): detect every 15 frames (35–40 FPS)
   - **Medium confidence** (0.60–0.80): detect every 10 frames (30–35 FPS)
   - **Low confidence** (<0.60): detect every 5 frames (25–30 FPS)
   - **Search mode**: detect every frame (20–25 FPS)
-- **Other post-processing**:
+
+- **Post-processing**:
   - boundary clipping
   - coordinate rounding
   - redetection after consecutive misses
@@ -183,7 +187,7 @@ pip install cython-bbox==0.1.3
 
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
-python -c "from ultralytics import YOLO; print('YOLOv8 OK')"
+python -c "from ultralytics import YOLO; print('YOLO11 OK')"
 python -c "import timm; print('TIMM OK')"
 ```
 
@@ -255,7 +259,7 @@ Download the pre-trained models from [Google Drive](https://drive.google.com/dri
 
 ```bash
 # Place downloaded weights in checkpoints directory:
-# checkpoints/detection.pt (YOLOv8 model)
+# checkpoints/detection.pt (YOLO11 model)
 # checkpoints/siamese.pth (Siamese network model)
 ```
 
@@ -289,7 +293,7 @@ Zalo-AI-DLUS/
 ├── config/                       # Configuration files
 │   └── config.yaml               # Main configuration
 ├── checkpoints/                  # Model weights (gitignored)
-│   └── best.pt                   # Trained YOLOv8 model
+│   └── best.pt                   # Trained YOLO11 model
 │   └── siamese.pt                # Trained Siamese model
 ├── data/                         # Dataset (gitignored)
 ├── results/                      # Output results (gitignored)
@@ -320,7 +324,7 @@ names: ['target']
 
 ### Step 2: Train models
 
-#### Train YOLOv8
+#### Train YOLO11
 
 > [!TIP]
 > If you are only reproducing results, start with **Option 1 (download pretrained weights)** and jump to [Inference](#inference).
@@ -328,17 +332,17 @@ names: ['target']
 ```bash
 python -m src.train_yolo \
   --data data.yaml \
-  --model yolov8s.pt \
+  --model yolo11s.pt \
   --epochs 100 \
   --img-size 640 \
   --batch-size 16 \
   --project runs/train \
-  --name yolov8s_aeroeyes
+  --name yolo11s_aeroeyes
 ```
 
 **Training Parameters:**
 - `--data`: Path to data.yaml configuration
-- `--model`: Pretrained model (yolov8n.pt, yolov8s.pt, yolov8m.pt)
+- `--model`: Pretrained model (yolo11n.pt, yolo11s.pt, yolo11m.pt)
 - `--epochs`: Number of training epochs (default: 100)
 - `--img-size`: Input image size (default: 640)
 - `--batch-size`: Batch size (adjust based on GPU memory)
@@ -365,9 +369,9 @@ python -m src.train_siamese \
 
 After training, copy the best weights to the checkpoints directory:
 
-**For YOLOv8:**
+**For YOLO11:**
 ```bash
-cp runs/train/yolov8s_aeroeyes/weights/best.pt checkpoints/detection.pt
+cp runs/train/yolo11s_aeroeyes/weights/best.pt checkpoints/detection.pt
 ```
 
 **For Siamese Network:**
@@ -472,7 +476,7 @@ Edit `config/config.yaml` to adjust model parameters:
 ```yaml
 models:
   yolo:
-      type: "yolov8s"
+      type: "yolov11s"
       weights: "checkpoints/detection.pt"
       img_size: 640
       conf_threshold: 0.20
@@ -555,7 +559,7 @@ Our method demonstrates significant improvements over baseline approaches across
 
 **Improvement:**
 - **Recall for small objects:** 0.15 (baseline) → 0.68 (ours) - **353% increase**
-- Fine-tuned YOLOv8s on drone dataset enables accurate detection of objects < 1% of frame area
+- Fine-tuned YOLO11s on drone dataset enables accurate detection of objects < 1% of frame area
 
 ---
 
@@ -668,7 +672,7 @@ yolo:
 yolo export model=checkpoints/best.pt format=engine half=True device=0
 ```
 2. Increase detection intervals in config
-3. Use smaller model (yolov8n instead of yolov8s)
+3. Use smaller model (yolo11n instead of yolo11s)
 
 ### Issue: Import errors
 
@@ -772,7 +776,7 @@ For questions or issues:
 
 ## Acknowledgments
 
-- YOLOv8 [Ultralytics](https://github.com/ultralytics/ultralytics)
+- YOLO11 [Ultralytics](https://github.com/ultralytics/ultralytics)
 - MobileNetV4: [github](https://github.com/jiaowoguanren0615/MobileNetV4)
 - ByteTrack: [ByteTrack](https://github.com/ifzhang/ByteTrack)
 - Zalo AI Challenge 2025
