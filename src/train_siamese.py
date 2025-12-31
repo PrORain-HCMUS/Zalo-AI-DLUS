@@ -186,13 +186,13 @@ def prepare_data(args):
 
 
 def prepare_model(query_data, gd_img_dict, args):
-    
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = timm.create_model(
         "hf_hub:timm/mobilenetv4_conv_medium.e500_r224_in1k",              
         pretrained=True,
         features_only=True,
         out_indices=(1, 2, 4)  # Number of output classes
-    ).to("cpu")
+    ).to(device)
     model.eval()
 
     data_config = timm.data.resolve_model_data_config(model)
@@ -219,7 +219,7 @@ def train_model(prototypeExtractor, train_loader, val_loader, args):
     best_val_loss = float('inf') #
     min_delta = 1e-4
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-
+    prototypeExtractor.to(device)
     loss_fn = nn.CosineEmbeddingLoss()
     optimizer = torch.optim.Adam(prototypeExtractor.parameters(), lr=lr)
 
