@@ -476,7 +476,7 @@ Edit `config/config.yaml` to adjust model parameters:
 ```yaml
 models:
   yolo:
-      type: "yolov11s"
+      type: "yolo11s"
       weights: "checkpoints/detection.pt"
       img_size: 640
       conf_threshold: 0.20
@@ -732,8 +732,8 @@ The competition setting is **zero-shot**: the target class may not exist in the 
 - Start with `conf_threshold` (Stage 1) to trade recall vs false positives.
 - Then tune `threshold` (Stage 2) to control how strict the matching is.
 
-> [!TIP]
-> If you see many missed detections, slightly lower `conf_threshold`. If you see many false positives, increase the Siamese `threshold`.
+
+If you see many missed detections, slightly lower `conf_threshold`. If you see many false positives, increase the Siamese `threshold`.
 
 </details>
 
