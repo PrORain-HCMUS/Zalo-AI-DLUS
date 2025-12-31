@@ -39,6 +39,51 @@ This project addresses the challenge of zero-shot small object detection in dron
 
 ![Pipeline Flow](assets/img/pipeline.jpg)
 
+### Detailed Breakdown
+
+> [!IMPORTANT]
+> The pipeline follows a **high-recall detection** stage first, then a **re-identification** stage to filter false positives using **1–3 reference images**.
+
+#### Stage 1 — Detection (YOLO11s)
+
+- **Model**: `yolo11s` (fine-tuned on drone data, class-agnostic)
+- **Parameters**: ~18.3M
+- **Goal**: maximize recall (capture all potential targets)
+- **Key hyperparameters**:
+  - `conf_threshold`: **0.20**
+  - `iou_threshold (NMS)`: **0.45**
+
+#### Stage 2 — Re-identification (Siamese MobileNetV4)
+
+- **Model**: Siamese network with `MobileNetV4` backbone
+- **Parameters**: ~30.3M
+- **Similarity**: cosine similarity between ROI embedding and reference embedding
+- **Caching**: reference features are cached to speed up inference
+- **Key hyperparameters**:
+  - `threshold` (similarity): **0.60** (configurable)
+
+> [!NOTE]
+> Stage 2 is designed to improve precision by filtering false positives produced by Stage 1.
+
+#### Tracking & Post-processing
+
+- **Tracker**: ByteTrack
+- **Temporal consistency**:
+  - **Kalman Filter**: predict object location in the next frame
+  - **IoU Matching**: associate detections to tracks
+  - **Track Management**: maintain/remove tracks over time
+  - **Confidence Decay**: decay track confidence when detections are missing
+- **Adaptive detection intervals** (for speed vs accuracy trade-off):
+  - **High confidence** (>0.80): detect every 15 frames (35–40 FPS)
+  - **Medium confidence** (0.60–0.80): detect every 10 frames (30–35 FPS)
+  - **Low confidence** (<0.60): detect every 5 frames (25–30 FPS)
+  - **Search mode**: detect every frame (20–25 FPS)
+- **Other post-processing**:
+  - boundary clipping
+  - coordinate rounding
+  - redetection after consecutive misses
+  - temporal smoothing
+
 ---
 
 ## System Requirements
@@ -646,6 +691,53 @@ python -c "from ultralytics import settings; settings.update({'datasets_dir': 'D
 
 ---
 
+## FAQ
+
+<details>
+<summary><strong>How many reference images do I need?</strong></summary>
+
+<br>
+
+You can use **1–3 reference images**. Using 3 references is recommended because the re-identification stage compares detections against all reference embeddings (cached) and keeps the best match.
+
+</details>
+
+<details>
+<summary><strong>Why two stages instead of a single detector?</strong></summary>
+
+<br>
+
+The competition setting is **zero-shot**: the target class may not exist in the detector’s training labels. Stage 1 generates **class-agnostic proposals** (high recall), while Stage 2 performs **reference-based verification** (higher precision).
+
+</details>
+
+<details>
+<summary><strong>What should I tune first if results are bad?</strong></summary>
+
+<br>
+
+- Start with `conf_threshold` (Stage 1) to trade recall vs false positives.
+- Then tune `threshold` (Stage 2) to control how strict the matching is.
+
+> [!TIP]
+> If you see many missed detections, slightly lower `conf_threshold`. If you see many false positives, increase the Siamese `threshold`.
+
+</details>
+
+<details>
+<summary><strong>Where does real-time speed come from?</strong></summary>
+
+<br>
+
+Speed comes from:
+- caching reference embeddings
+- ByteTrack maintaining temporal consistency
+- adaptive detection intervals (skipping detection for stable tracks)
+
+</details>
+
+---
+
 ## Citation
 
 If you use this code, please cite:
@@ -658,12 +750,6 @@ If you use this code, please cite:
   howpublished={Zalo AI Challenge 2025}
 }
 ```
-
----
-
-## License
-
-MIT License
 
 ---
 
